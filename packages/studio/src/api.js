@@ -44,6 +44,16 @@ export const api = {
   updateCharacter: (id, body) => request(`/api/characters/${id}`, { method: 'PATCH', body }).then((d) => d.character),
   deleteCharacter: (id) => request(`/api/characters/${id}`, { method: 'DELETE' }),
   addCharacterRef: (id, assetId) => request(`/api/characters/${id}/refs`, { method: 'POST', body: { assetId } }).then((d) => d.character),
+  designVoice: (id, voiceDescription) =>
+    request(`/api/characters/${id}/voice`, { method: 'POST', body: { voiceDescription } }).then((d) => d.character),
+  generateSpeech: (body) => request('/api/generations/speech', { method: 'POST', body }).then((d) => d.generation),
+  saveVoiceover: (clipId, { blob, speechGenerationId, mix }) => {
+    const form = new FormData();
+    form.append('file', new File([blob], 'voiceover.mp4', { type: 'video/mp4' }));
+    form.append('speechGenerationId', speechGenerationId);
+    form.append('mix', JSON.stringify(mix));
+    return request(`/api/generations/${clipId}/voiceover`, { method: 'POST', form }).then((d) => d.generation);
+  },
 
   listGenerations: (params) => request(`/api/generations${query(params)}`).then((d) => d.generations),
   getGeneration: (id) => request(`/api/generations/${id}`).then((d) => d.generation),

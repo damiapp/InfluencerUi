@@ -8,7 +8,7 @@ import { Button, ErrorNote, Field, Panel, Spinner, TextArea, TextInput, cx } fro
 
 const MIN_REFS = 3;
 const MAX_REFS = 8;
-const EMPTY = { id: null, name: "", bible: "", styleNotes: "", refs: [] };
+const EMPTY = { id: null, name: "", bible: "", styleNotes: "", voiceDescription: "", voiceId: null, voicePreview: null, refs: [] };
 
 export default function CharactersStudio() {
   const { characters, charactersLoaded, refreshCharacters, navigate, route, replaceParams, toast } = useStudio();
@@ -16,12 +16,14 @@ export default function CharactersStudio() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [designing, setDesigning] = useState(false);
 
   // Select the character from ?id= or the first one.
   useEffect(() => {
     if (!charactersLoaded) return;
     const wanted = route.params.id ? characters.find((c) => c.id === route.params.id) : null;
-    if (wanted) setDraft(wanted);
+    // Don't overwrite edits already made to this character while loading.
+    if (wanted) setDraft((d) => (d.id === wanted.id ? d : wanted));
     // Keep anything typed into a new draft while the list was loading.
     else if (route.params.id === "new") setDraft((d) => (d.id ? EMPTY : d));
     else if (!draft.id && characters.length) setDraft(characters[0]);
@@ -40,13 +42,20 @@ export default function CharactersStudio() {
     saved.name !== draft.name ||
     saved.bible !== draft.bible ||
     saved.styleNotes !== draft.styleNotes ||
+    (saved.voiceDescription || "") !== (draft.voiceDescription || "") ||
     saved.refs.map((r) => r.id).join() !== draft.refs.map((r) => r.id).join();
 
   const save = async () => {
     setSaving(true);
     setError("");
     try {
-      const body = { name: draft.name, bible: draft.bible, styleNotes: draft.styleNotes, refAssetIds: draft.refs.map((r) => r.id) };
+      const body = {
+        name: draft.name,
+        bible: draft.bible,
+        styleNotes: draft.styleNotes,
+        voiceDescription: draft.voiceDescription || "",
+        refAssetIds: draft.refs.map((r) => r.id),
+      };
       const character = draft.id ? await api.updateCharacter(draft.id, body) : await api.createCharacter(body);
       await refreshCharacters();
       setDraft(character);
@@ -56,6 +65,21 @@ export default function CharactersStudio() {
       setError(err.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const designVoice = async () => {
+    setDesigning(true);
+    setError("");
+    try {
+      const character = await api.designVoice(draft.id, draft.voiceDescription);
+      await refreshCharacters();
+      setDraft((d) => ({ ...d, voiceDescription: character.voiceDescription, voiceId: character.voiceId, voicePreview: character.voicePreview }));
+      toast(`Designed ${character.name}'s voice`, "success");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDesigning(false);
     }
   };
 
@@ -142,6 +166,27 @@ export default function CharactersStudio() {
             onChange={(e) => setDraft({ ...draft, styleNotes: e.target.value })}
             placeholder="Natural iPhone photo look, warm film tones, minimal makeup."
           />
+        </Field>
+
+        <Field label="Voice" hint="used for spoken lines and voiceovers">
+          <TextArea
+            rows={3}
+            value={draft.voiceDescription || ""}
+            onChange={(e) => setDraft({ ...draft, voiceDescription: e.target.value })}
+            placeholder="24-year-old woman, warm slightly husky alto, soft London accent, relaxed pace, bright and playful, a small laugh at the end of sentences."
+          />
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <Button size="sm" onClick={designVoice} disabled={!draft.id || designing || (draft.voiceDescription || "").trim().length < 10}>
+              {designing ? <Spinner /> : "🎙"} {draft.voiceId ? "Re-design voice" : "Design voice"}
+            </Button>
+            {draft.voicePreview && <audio key={draft.voicePreview.url} src={draft.voicePreview.url} controls className="h-8" />}
+            {draft.voiceId && <span className="font-mono text-[11px] text-muted">{draft.voiceId}</span>}
+          </div>
+          <p className="mt-1 text-[11px] text-muted">
+            The description is added word-for-word to every video line she speaks (close, not exact). “Design voice” also creates a
+            stored Gemini voice for voiceovers, which sounds identical every time. Re-designing creates a new voice; saved
+            voiceovers keep their audio.
+          </p>
         </Field>
 
         <Field label="Locked reference images" hint={`${draft.refs.length}/${MAX_REFS} · ${MIN_REFS}–${MAX_REFS} recommended`}>

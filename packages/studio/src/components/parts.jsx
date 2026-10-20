@@ -131,6 +131,14 @@ export function GenerationMedia({ generation, className, controls = false }) {
       </div>
     );
   }
+  if (generation.kind === "audio") {
+    return (
+      <div className={cx("flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-fuchsia-950/60 to-cyan-950/60 p-3", className)}>
+        <span className="text-3xl">🎙</span>
+        <audio src={output.url} controls className="w-full max-w-[260px]" />
+      </div>
+    );
+  }
   if (generation.kind === "video") {
     return <video key={output.url} src={output.url} className={cx("bg-black object-contain", className)} controls={controls} loop playsInline muted={!controls} />;
   }
@@ -213,7 +221,7 @@ export function GenerationDetails({ generation }) {
     ["Model", model?.name || generation.model],
     ["Operation", generation.operation],
     ["Settings", Object.entries(generation.settings || {}).filter(([, v]) => v !== undefined && v !== null).map(([k, v]) => `${k}: ${v}`).join(" · ")],
-    ["Duration", generation.kind === "video" ? `${generation.durationSeconds ?? "?"} s (clip total ${generation.totalDurationSeconds ?? "?"} s)` : null],
+    ["Duration", generation.kind === "video" ? `${generation.durationSeconds ?? "?"} s (clip total ${generation.totalDurationSeconds ?? "?"} s)` : generation.kind === "audio" && generation.durationSeconds ? `${generation.durationSeconds.toFixed(1)} s` : null],
     ["Estimated cost", generation.costEstimate != null ? formatCost(generation.costEstimate) : null],
     ["Interaction id", generation.interactionId],
     ["Provider", generation.provider],

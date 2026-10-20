@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
 import { DEFAULT_VIDEO_MODEL, getModel } from "../models.js";
-import { DEFAULT_EXTEND_PROMPT, buildEditPrompt, buildVideoPrompt } from "../prompt.js";
+import { DEFAULT_EXTEND_PROMPT, buildDialogueLines, buildEditPrompt, buildVideoPrompt } from "../prompt.js";
 import { estimateCost, formatCost } from "../pricing.js";
 import { usePolling, useStudio } from "./StudioContext.jsx";
 import MediaPicker from "./MediaPicker.jsx";
+import VoiceoverPanel from "./VoiceoverPanel.jsx";
 import {
   CharacterPicker,
   CostLine,
@@ -16,9 +17,9 @@ import {
   GenerationMedia,
   PresetBar,
 } from "./parts.jsx";
-import { Button, ErrorNote, Field, Label, Panel, Segmented, Spinner, TextArea, Thumb, Toggle, cx } from "./ui.jsx";
+import { Button, ErrorNote, Field, Label, Panel, Segmented, Spinner, TextArea, TextInput, Thumb, Toggle, cx } from "./ui.jsx";
 
-const OP_LABEL = { generate: "Original", edit: "Edit", extend: "Extend" };
+const OP_LABEL = { generate: "Original", edit: "Edit", extend: "Extend", voiceover: "Voiceover" };
 const assetFromId = (id) => (id ? { id, kind: "image", url: `/api/media/${id}` } : null);
 const isPending = (g) => g && (g.status === "running" || g.status === "finalizing");
 
@@ -52,6 +53,7 @@ export default function VideoStudio() {
   const [firstFrame, setFirstFrame] = useState(null);
   const [lastFrame, setLastFrame] = useState(null);
   const [prompt, setPrompt] = useState("");
+  const [dialogue, setDialogue] = useState("");
   const [override, setOverride] = useState(null);
   const [aspectRatio, setAspectRatio] = useState(model.defaultAspectRatio);
   const [resolution, setResolution] = useState(model.defaultResolution);
@@ -68,6 +70,7 @@ export default function VideoStudio() {
   const [keepSame, setKeepSame] = useState(true);
   const [extendPrompt, setExtendPrompt] = useState(DEFAULT_EXTEND_PROMPT);
   const [extendWithRefs, setExtendWithRefs] = useState(true);
+  const [extendDialogue, setExtendDialogue] = useState("");
 
   // Deep links: ?firstFrame=<assetId>&character=<id>&clip=<generationId>
   useEffect(() => {
@@ -128,8 +131,9 @@ export default function VideoStudio() {
         characterRefCount: characterRefs.length,
         extraRefCount: extras.length,
         prompt,
+        dialogue,
       }),
-    [character, firstFrame, effectiveLast, characterRefs.length, extras.length, prompt],
+    [character, firstFrame, effectiveLast, characterRefs.length, extras.length, prompt, dialogue],
   );
   const finalPrompt = override ?? built;
   const inputImages = referenceAssetIds.length + (firstFrame ? 1 : 0) + (effectiveLast ? 1 : 0);
@@ -181,12 +185,18 @@ export default function VideoStudio() {
   const clipReady = clip?.status === "completed";
   const clipCharacter = characters.find((c) => c.id === clip?.characterId) || null;
   const extendRefs = extendWithRefs ? (clipCharacter?.refs || []).slice(0, model.maxReferenceImages) : [];
-  const canEdit = clipReady && clipTotal <= model.maxEditSeconds;
-  const canExtend = clipReady && clipTotal + model.extendStepSeconds <= model.maxTotalSeconds;
+  // Voiceover versions are muxed locally and have no Gemini interaction to continue.
+  const isVoiceover = clip?.operation === "voiceover";
+  const canEdit = clipReady && !isVoiceover && clipTotal <= model.maxEditSeconds;
+  const canExtend = clipReady && !isVoiceover && clipTotal + model.extendStepSeconds <= model.maxTotalSeconds;
   const editFinal = buildEditPrompt(editPrompt, keepSame);
-  const extendFinal = extendRefs.length
-    ? `${extendPrompt.trim()}\nKeep ${clipCharacter.name} consistent with ${extendRefs.map((_, i) => `<IMAGE_REF_${i}>`).join(" ")}.`
-    : extendPrompt.trim();
+  const extendFinal = [
+    extendPrompt.trim(),
+    ...buildDialogueLines(clipCharacter, extendDialogue),
+    extendRefs.length ? `Keep ${clipCharacter.name} consistent with ${extendRefs.map((_, i) => `<IMAGE_REF_${i}>`).join(" ")}.` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
   const clipResolution = clip?.settings?.resolution || model.defaultResolution;
   const editEstimate = estimateCost(pricing, { kind: "video", model: model.id, resolution: clipResolution, durationSeconds: clipTotal });
   const extendEstimate = estimateCost(pricing, {
@@ -217,6 +227,7 @@ export default function VideoStudio() {
       setRecent((list) => [generation, ...list]);
       showClip(generation, [...chain, generation]);
       if (operation === "edit") setEditPrompt("");
+      if (operation === "extend") setExtendDialogue("");
       refreshStats();
     } catch (err) {
       setError(err.message);
@@ -276,6 +287,15 @@ export default function VideoStudio() {
 
         <Field label="Prompt">
           <TextArea rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="She turns to the camera, smiles and brushes her hair behind her ear…" />
+        </Field>
+        <Field label="Dialogue" hint={character?.voiceDescription ? `voice: ${character.name}'s description` : "optional"}>
+          <TextArea rows={2} value={dialogue} onChange={(e) => setDialogue(e.target.value)} placeholder="What she says on camera, e.g. Morning! Come get coffee with me." />
+          {dialogue.trim() && /no dialogue/i.test(prompt) && (
+            <p className="mt-1 text-[11px] text-amber-300">The prompt says “No dialogue” — remove that preset so she speaks this line.</p>
+          )}
+          {dialogue.trim() && !character?.voiceDescription && (
+            <p className="mt-1 text-[11px] text-amber-300">Add a Voice description to the character so her voice stays similar between clips.</p>
+          )}
         </Field>
         <PresetBar
           kind="video"
@@ -355,7 +375,7 @@ export default function VideoStudio() {
 
               <div className="grid gap-3 md:grid-cols-2">
                 <Panel className="space-y-2 p-3">
-                  <Label hint={canEdit ? null : clipReady ? `clips ≤ ${model.maxEditSeconds}s only` : "wait for the clip"}>Edit this clip</Label>
+                  <Label hint={canEdit ? null : isVoiceover ? "edit the version before" : clipReady ? `clips ≤ ${model.maxEditSeconds}s only` : "wait for the clip"}>Edit this clip</Label>
                   <TextArea rows={2} value={editPrompt} onChange={(e) => setEditPrompt(e.target.value)} placeholder="Make her jacket red" />
                   <Toggle checked={keepSame} onChange={setKeepSame} label="Append “Keep everything else the same.”" />
                   {editPrompt && <p className="font-mono text-[11px] text-muted">→ {editFinal}</p>}
@@ -369,6 +389,7 @@ export default function VideoStudio() {
                     Extend +{model.extendStepSeconds}s
                   </Label>
                   <TextArea rows={2} value={extendPrompt} onChange={(e) => setExtendPrompt(e.target.value)} />
+                  <TextInput value={extendDialogue} onChange={(e) => setExtendDialogue(e.target.value)} placeholder="New spoken line (optional)" />
                   {clipCharacter?.refs.length > 0 && (
                     <Toggle checked={extendWithRefs} onChange={setExtendWithRefs} label={`Re-attach ${clipCharacter.name}'s refs`} />
                   )}
@@ -376,9 +397,23 @@ export default function VideoStudio() {
                   <Button className="w-full" disabled={!canExtend || !extendPrompt.trim() || !!busy} onClick={() => continueClip("extend")}>
                     {busy === "extend" ? <Spinner /> : "⇥"} Extend
                   </Button>
-                  {clipReady && !canExtend && <p className="text-[11px] text-muted">Maximum length reached.</p>}
+                  {clipReady && !canExtend && (
+                    <p className="text-[11px] text-muted">{isVoiceover ? "Extend the version before the voiceover." : "Maximum length reached."}</p>
+                  )}
                 </Panel>
               </div>
+
+              {clipReady && !isVoiceover && (
+                <VoiceoverPanel
+                  key={clip.id}
+                  clip={clip}
+                  clipCharacter={clipCharacter}
+                  onCreated={(generation) => {
+                    setRecent((list) => [generation, ...list]);
+                    showClip(generation, [...chain, generation]);
+                  }}
+                />
+              )}
 
               <Panel className="p-3">
                 <GenerationDetails generation={clip} />

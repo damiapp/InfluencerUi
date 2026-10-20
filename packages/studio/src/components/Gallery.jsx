@@ -19,7 +19,7 @@ export default function Gallery() {
 
   const params = useCallback(
     (before) => ({
-      kind: filter === "image" || filter === "video" ? filter : null,
+      kind: ["image", "video", "audio"].includes(filter) ? filter : null,
       favorite: filter === "favorites",
       characterId: characterId || null,
       before,
@@ -84,6 +84,7 @@ export default function Gallery() {
               { value: "all", label: "All" },
               { value: "image", label: "Images" },
               { value: "video", label: "Videos" },
+              { value: "audio", label: "Voice" },
               { value: "favorites", label: "★ Favorites" },
             ]}
           />
@@ -114,8 +115,8 @@ export default function Gallery() {
                 <div key={g.id} className="overflow-hidden rounded-xl border border-white/[0.07] bg-card-bg">
                   <button type="button" className="relative block w-full" onClick={() => setDetail(g)}>
                     <GenerationMedia generation={g} className="aspect-[3/4] w-full" />
-                    <span className={cx("absolute left-2 top-2 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase", g.kind === "video" ? "bg-fuchsia-500/80 text-white" : "bg-black/60 text-white")}>
-                      {g.kind === "video" ? `${g.operation === "generate" ? "video" : g.operation} · ${g.totalDurationSeconds}s` : "image"}
+                    <span className={cx("absolute left-2 top-2 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase", g.kind === "image" ? "bg-black/60 text-white" : "bg-fuchsia-500/80 text-white")}>
+                      {g.kind === "video" ? `${g.operation === "generate" ? "video" : g.operation} · ${g.totalDurationSeconds}s` : g.kind === "audio" ? "voice" : "image"}
                     </span>
                     {g.favorite && <span className="absolute right-2 top-2 text-amber-300">★</span>}
                   </button>
@@ -135,7 +136,7 @@ export default function Gallery() {
         )}
       </div>
 
-      <Modal open={!!detail} onClose={() => setDetail(null)} title={detail?.kind === "video" ? "Video" : "Image"} wide>
+      <Modal open={!!detail} onClose={() => setDetail(null)} title={{ video: "Video", audio: "Voice line", image: "Image" }[detail?.kind] || "Item"} wide>
         {detail && (
           <div className="grid gap-5 md:grid-cols-[1fr,320px]">
             <GenerationMedia generation={detail} controls className="max-h-[70vh] w-full rounded-xl object-contain" />

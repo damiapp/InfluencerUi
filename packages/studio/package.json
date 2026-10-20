@@ -20,5 +20,8 @@
   "peerDependencies": {
     "react": ">=18.0.0",
     "react-dom": ">=18.0.0"
+  },
+  "dependencies": {
+    "mediabunny": "^1.62.0"
   }
 }
