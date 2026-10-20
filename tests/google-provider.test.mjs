@@ -87,6 +87,20 @@ test('generateImage sends refs as uploaded file parts then text, with response_f
   assert.deepEqual([...out.body], [1, 2, 3]);
 });
 
+test('a reference uploaded once is reused by later calls with the same media object', async () => {
+  const uploads = [];
+  const { fetch, calls } = fakeGemini({
+    ...fileHandlers,
+    'POST /v1beta/interactions': () => json({ id: 'x', status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'image', data: 'AA==' }] }] }),
+  });
+  const p = provider(fetch);
+  const refs = [media('a1', uploads)];
+  await p.generateImage({ model: 'm', prompt: 'one', media: refs });
+  await p.generateImage({ model: 'm', prompt: 'two', media: refs });
+  assert.equal(uploads.length, 1);
+  assert.equal(calls.filter((c) => c.key === 'POST /upload/v1beta/files').length, 1);
+});
+
 test('cached reference URIs are reused', async () => {
   const { fetch, calls } = fakeGemini({
     'POST /v1beta/interactions': () => json({ id: 'x', status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'image', data: 'AA==' }] }] }),
