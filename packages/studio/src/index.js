@@ -1,3 +1,12 @@
-"use client";
-
-export {};
+export { default as StudioShell } from './components/StudioShell.jsx';
+export { default as ImageStudio } from './components/ImageStudio.jsx';
+export { default as VideoStudio } from './components/VideoStudio.jsx';
+export { default as InfluencerStudio } from './components/InfluencerStudio.jsx';
+export { default as CharactersStudio } from './components/CharactersStudio.jsx';
+export { default as Gallery } from './components/Gallery.jsx';
+export { default as MediaPicker } from './components/MediaPicker.jsx';
+export { StudioProvider, useStudio } from './components/StudioContext.jsx';
+export { api } from './api.js';
+export * from './models.js';
+export * from './prompt.js';
+export * from './pricing.js';
