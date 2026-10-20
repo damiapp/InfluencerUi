@@ -1,9 +1,7 @@
-import StandaloneShell from '@/components/StandaloneShell';
-
 export const metadata = {
-  title: 'Studio — Open Generative AI',
+  title: 'Studio — Influencer Studio',
 };
 
 export default function StudioPage() {
-  return <StandaloneShell />;
+  return <main className="p-8 text-white/60">Studio is being rebuilt for the Gemini API.</main>;
 }
