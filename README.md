@@ -10,6 +10,10 @@ Google's Gemini API directly and is stored in your own Cloudflare account.
   720p with a 1080p option. Supports `<FIRST_FRAME>`, `<LAST_FRAME>` and `<IMAGE_REF_N>` role tags, multi-turn
   **Edit** (`previous_interaction_id`, with an optional "Keep everything else the same.") and **Extend**
   (+10 s per step, up to 40 s).
+- **Voice**: each character gets a voice description, which is added word for word to every line she speaks
+  in Omni (close but not identical between clips). **Design voice** also creates a stored Gemini voice
+  (Voice Design), and **Voiceover** speaks a script in that exact voice with Gemini TTS and mixes it onto a clip
+  as a new version, so the voice is identical every time.
 - **AI Influencer**: a trait picker for designing a new person. It generates portraits and saves the best ones as a
   character.
 - **Characters**: each character has a name, a bible (face, hair, signature details), 3–8 locked reference images
@@ -170,11 +174,42 @@ packages/studio/                        React UI (studios, picker, prompt builde
 `lib/providers/index.js`, and add its models to `packages/studio/src/models.js` and prices to
 `config/pricing.json`.
 
+## Voice and audio
+
+Gemini Omni generates the clip's sound together with the picture: speech, ambience and music, all from the
+prompt. In Video Studio:
+
+- **Dialogue** turns a line into `Ava says to the camera: "…"`, followed by `Voice: <the character's voice
+  description>` and `No other dialogue or voiceover.` Omni cannot take a stored voice, so the voice is
+  described in the same words every time. It stays close across clips and is most stable within one
+  generate → extend chain. The Extend box takes a new spoken line as well.
+- **Sound presets**: no music, natural ambience, calm or upbeat music.
+- **Voiceover (character voice)**: for a voice that is exactly the same every time. In Characters, **Design voice**
+  calls Gemini Voice Design (`POST /v1beta/voices`, a stored prompted voice that lasts a year after its last use)
+  and plays a preview. In Video Studio the script is spoken by `gemini-3.8-flash-tts` with that voice id, and
+  the browser mixes it onto the clip:
+  - the video stream is copied without re-encoding;
+  - the clip's own audio is kept at 0–100 % under the voice;
+  - the voice starts at a chosen offset;
+  - the audio is encoded with WebCodecs as AAC, or Opus where AAC isn't available (Firefox on Linux).
+
+  The result is uploaded to R2 as a **Voiceover** version of the clip. The mixing uses
+  [Mediabunny](https://mediabunny.dev) (MPL-2.0) and runs in the browser, because Workers can't run ffmpeg. Her
+  lips don't move to a voiceover, so use it for narration and off-camera lines, and generate those clips with
+  **No dialogue**. Voiceover versions can't be edited or extended: edit or extend the version before it, then
+  add the voiceover again.
+
+Speech costs about $9 per 1M audio tokens (≈ $0.0002 per second) and shows up in the monthly total. Voice
+Design has no separate published price.
+
 ## Notes and limits
 
 - Omni edits work on clips of up to 10 s. Extend in 10 s steps up to 40 s total. Edit first, then extend.
 - Video Studio sends at most 5 reference images (the documented Omni limit), and you can toggle which of the
   character's references are sent. Image Studio sends all of them (up to 14).
+- Mixing a voiceover needs a browser with WebCodecs audio encoding (current Chrome or Firefox). To keep the
+  clip's original sound under the voice, the browser must also decode AAC. Google Chrome and Firefox do; some
+  open-source Chromium builds don't, and then only the voice is kept.
 - Interactions must stay stored (`store: true`) for Edit/Extend to work.
 - Google documents that uploading videos for editing is not available in the EEA, Switzerland, the UK and some US
   states. This app only edits and extends clips it generated itself, which Google says is supported everywhere.
