@@ -9,7 +9,7 @@ function round(value) {
 /**
  * @param {object} pricing  contents of config/pricing.json
  * @param {object} request
- * @param {'image'|'video'|'audio'} request.kind
+ * @param {'image'|'video'|'audio'|'text'} request.kind
  * @param {string} request.model
  * @param {string} [request.imageSize]        image: 1K/2K/4K
  * @param {number} [request.count]            image: number of images
@@ -40,6 +40,14 @@ export function estimateCost(pricing, request) {
     return round(seconds * perSecond + inputImages * (table.inputImage || 0));
   }
 
+  if (request.kind === 'text') {
+    const table = pricing.text?.[request.model];
+    if (!table) return null;
+    const input = (request.inputTokens || 0) + inputImages * (table.tokensPerImage || 0);
+    const output = request.outputTokens ?? table.typicalOutputTokens ?? 0;
+    return round((input * table.inputPerMillion + output * table.outputPerMillion) / 1e6);
+  }
+
   if (request.kind === 'audio') {
     const table = pricing.audio?.[request.model];
     if (!table) return null;
@@ -47,6 +55,16 @@ export function estimateCost(pricing, request) {
   }
 
   return null;
+}
+
+/** Exact cost of a text call from the usage block Google returns, if priced. */
+export function textCostFromUsage(pricing, model, usage) {
+  const table = pricing?.text?.[model];
+  if (!table || !usage) return null;
+  const input = usage.total_input_tokens || 0;
+  const output = (usage.total_output_tokens || 0) + (usage.total_thought_tokens || 0);
+  if (!input && !output) return null;
+  return round((input * table.inputPerMillion + output * table.outputPerMillion) / 1e6);
 }
 
 export function formatCost(value, currency = 'USD') {

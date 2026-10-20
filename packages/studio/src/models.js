@@ -18,6 +18,8 @@ export const IMAGE_MODELS = [
     kind: 'image',
     description: 'Highest quality; best identity fidelity and text rendering.',
     maxReferenceImages: 14,
+    // Docs: of the 14, up to 5 people and 6 high-fidelity images.
+    characterRefsHint: 'Up to 14 images; identity holds best with ~6 clear refs of one person.',
     aspectRatios: COMMON_IMAGE_RATIOS,
     imageSizes: ['1K', '2K', '4K'],
     defaultImageSize: '2K',
@@ -44,8 +46,9 @@ export const VIDEO_MODELS = [
     description: 'Conversational video generation, editing and extension.',
     aspectRatios: ['9:16', '16:9'],
     defaultAspectRatio: '9:16',
-    // The API also accepts 360p and 4k; add them here to expose them.
-    resolutions: ['720p', '1080p'],
+    // 360p is the cheap draft used by the pipeline's Test run. The API also
+    // accepts 4k; add it here to expose it.
+    resolutions: ['360p', '720p', '1080p'],
     defaultResolution: '720p',
     minDurationSeconds: 3,
     maxDurationSeconds: 10,
@@ -71,7 +74,19 @@ export const SPEECH_MODELS = [
   },
 ];
 
-export const ALL_MODELS = [...IMAGE_MODELS, ...VIDEO_MODELS, ...SPEECH_MODELS];
+// Multimodal text model used to write character bibles and tag references
+// (structured JSON output). Google's recommended balanced model, Oct 2026.
+export const TEXT_MODELS = [
+  {
+    id: 'gemini-3.8-flash',
+    name: 'Gemini 3.8 Flash',
+    provider: 'google',
+    kind: 'text',
+    description: 'Fast multimodal model with structured output.',
+  },
+];
+
+export const ALL_MODELS = [...IMAGE_MODELS, ...VIDEO_MODELS, ...SPEECH_MODELS, ...TEXT_MODELS];
 
 export function getModel(id) {
   return ALL_MODELS.find((model) => model.id === id) || null;
@@ -80,3 +95,4 @@ export function getModel(id) {
 export const DEFAULT_IMAGE_MODEL = IMAGE_MODELS[0].id;
 export const DEFAULT_VIDEO_MODEL = VIDEO_MODELS[0].id;
 export const DEFAULT_SPEECH_MODEL = SPEECH_MODELS[0].id;
+export const DEFAULT_TEXT_MODEL = TEXT_MODELS[0].id;

@@ -6,27 +6,49 @@
     "Image prices are per output image (standard, not batch).",
     "Video prices are per second of generated output. Omni bills 5,792 output tokens per second at 720p at $17.50 per 1M output tokens (about $0.101/s); 1080p is 8,688 tokens/s.",
     "inputImage is a rough per-image charge for reference images and frames (about 1k input tokens each).",
-    "Speech: $9 per 1M audio output tokens at ~25 tokens per second of speech; seconds are estimated from the script length. Voice Design itself has no separate published price."
+    "Speech: $9 per 1M audio output tokens at ~25 tokens per second of speech; seconds are estimated from the script length. Voice Design itself has no separate published price.",
+    "Text (bible writing): gemini-3.8-flash at $0.75 per 1M input and $3.75 per 1M output tokens (output includes thinking). The estimate assumes ~1,120 tokens per reference image; the stored cost uses the real token counts Google returns."
   ],
   "image": {
     "gemini-3-pro-image": {
-      "perImage": { "1K": 0.134, "2K": 0.134, "4K": 0.24 },
+      "perImage": {
+        "1K": 0.134,
+        "2K": 0.134,
+        "4K": 0.24
+      },
       "inputImage": 0.0022
     },
     "gemini-nano-banana-2.1": {
-      "perImage": { "1K": 0.067, "2K": 0.101, "4K": 0.151 },
+      "perImage": {
+        "1K": 0.067,
+        "2K": 0.101,
+        "4K": 0.151
+      },
       "inputImage": 0.0011
     }
   },
   "video": {
     "gemini-omni-1.1-flash": {
-      "perSecond": { "360p": 0.034, "720p": 0.101, "1080p": 0.152, "4k": 0.304 },
+      "perSecond": {
+        "360p": 0.034,
+        "720p": 0.101,
+        "1080p": 0.152,
+        "4k": 0.304
+      },
       "inputImage": 0.0015
     }
   },
   "audio": {
     "gemini-3.8-flash-tts": {
       "perSecond": 0.000225
+    }
+  },
+  "text": {
+    "gemini-3.8-flash": {
+      "inputPerMillion": 0.75,
+      "outputPerMillion": 3.75,
+      "tokensPerImage": 1120,
+      "typicalOutputTokens": 3000
     }
   }
 }

@@ -1,9 +1,12 @@
+import { bibleLines } from './bible.js';
+
 // Prompt assembly shared by the studios. The browser builds the final prompt
 // with these helpers and shows it for editing; the server sends whatever
 // final prompt the user approved, with media inputs ordered the same way the
 // builders assume: first frame, last frame, character refs, extra refs.
 
 export const KEEP_SAME_SUFFIX = 'Keep everything else the same.';
+export const SINGLE_SHOT_TEXT = 'In a single continuous shot. No scene cuts.';
 export const DEFAULT_EXTEND_PROMPT = 'Extend this video. The scene continues in a single continuous shot.';
 
 export const PROMPT_PRESETS = [
@@ -20,7 +23,7 @@ export const PROMPT_PRESETS = [
     group: 'Format',
     label: 'Single continuous shot',
     kinds: ['video'],
-    text: 'In a single continuous shot. No scene cuts.',
+    text: SINGLE_SHOT_TEXT,
   },
   {
     id: 'no-dialogue',
@@ -60,13 +63,6 @@ export function appendSnippet(prompt, snippet) {
   return base ? `${base} ${snippet}` : snippet;
 }
 
-function characterLines(character) {
-  if (!character) return [];
-  const lines = [];
-  const bible = (character.bible || '').trim();
-  lines.push(bible ? `Character: ${character.name}. ${bible}` : `Character: ${character.name}.`);
-  return lines;
-}
 
 function styleLine(character, extraStyle) {
   const parts = [character?.styleNotes, extraStyle].map((s) => (s || '').trim()).filter(Boolean);
@@ -78,7 +74,7 @@ function styleLine(character, extraStyle) {
  * Image inputs are sent as: character refs, then extra refs.
  */
 export function buildImagePrompt({ character = null, characterRefCount = 0, extraRefCount = 0, prompt = '' }) {
-  const lines = [...characterLines(character)];
+  const lines = [...bibleLines(character)];
 
   if (character && characterRefCount > 0) {
     const range = characterRefCount === 1 ? 'The first reference image shows' : `The first ${characterRefCount} reference images show`;
@@ -131,8 +127,7 @@ export function buildVideoPrompt({
 
   if (character) {
     const tags = Array.from({ length: characterRefCount }, (_, i) => `<IMAGE_REF_${i}>`).join(' ');
-    const bible = (character.bible || '').trim();
-    lines.push(`Character: ${character.name}${tags ? ` ${tags}` : ''}.${bible ? ` ${bible}` : ''}`);
+    lines.push(...bibleLines(character, { tags }));
   }
   if (extraRefCount > 0) {
     const tags = Array.from({ length: extraRefCount }, (_, i) => `<IMAGE_REF_${characterRefCount + i}>`).join(' ');

@@ -11,6 +11,8 @@
     "./models": "./src/models.js",
     "./pricing": "./src/pricing.js",
     "./prompt": "./src/prompt.js",
+    "./refs": "./src/refs.js",
+    "./bible": "./src/bible.js",
     "./package.json": "./package.json"
   },
   "files": [

@@ -292,3 +292,37 @@ test('mock voices are stable per voice id', async () => {
   assert.deepEqual(a, mockSpeechWav('voice_a', 'hello world'));
   assert.notDeepEqual(a, mockSpeechWav('voice_b', 'hello world'));
 });
+
+test('structured output request for the character bible', async () => {
+  const { BIBLE_SCHEMA } = await import('../packages/studio/src/bible.js');
+  const uploads = [];
+  const { fetch, calls } = fakeGemini({
+    ...fileHandlers,
+    'POST /v1beta/interactions': () => json({
+      id: 'txt1',
+      status: 'completed',
+      steps: [{ type: 'model_output', content: [{ type: 'text', text: '```json\n{"eyes":"green","prompt_paragraph":"Lena has green eyes."}\n```' }] }],
+      usage: { total_input_tokens: 2000, total_output_tokens: 300 },
+    }),
+  });
+  const result = await provider(fetch).generateStructured({ model: 'gemini-3.8-flash', prompt: 'Describe.', media: [media('r1', uploads)], schema: BIBLE_SCHEMA });
+  const create = calls.find((c) => c.key === 'POST /v1beta/interactions');
+  assert.deepEqual(create.body.response_format, { type: 'text', mime_type: 'application/json', schema: BIBLE_SCHEMA });
+  assert.equal(create.body.store, false);
+  assert.equal(create.body.input[0].type, 'image');
+  assert.deepEqual(create.body.input.at(-1), { type: 'text', text: 'Describe.' });
+  assert.equal(result.data.eyes, 'green');
+  assert.equal(result.usage.total_output_tokens, 300);
+});
+
+test('structured output errors surface the model text', async () => {
+  const { fetch } = fakeGemini({ 'POST /v1beta/interactions': () => json({ id: 'x', status: 'failed', errors: [{ message: 'Image input blocked by safety filters' }] }) });
+  await assert.rejects(provider(fetch).generateStructured({ model: 'm', prompt: 'p', schema: {} }), /blocked by safety filters/);
+});
+
+test('no-media results keep Google exact message', () => {
+  const r = provider(async () => json({})).toJobResult({ id: 'x', status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'text', text: 'I can’t create images of real people.' }] }] });
+  assert.equal(r.status, 'failed');
+  assert.equal(r.error, 'I can’t create images of real people.');
+  assert.equal(r.noMedia, true);
+});
