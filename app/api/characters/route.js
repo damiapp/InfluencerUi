@@ -13,14 +13,14 @@ export const POST = route(async (request) => {
   const body = await readJson(request);
   const name = String(body.name || '').trim();
   if (!name) throw new HttpError(400, 'Name is required');
-  const refAssetIds = await validateRefs(env.DB, body.refAssetIds || []);
+  const refs = await validateRefs(env.DB, body.refs || body.refAssetIds || []);
   const character = await createCharacter(env.DB, {
     id: newId('chr'),
     name,
     bible: String(body.bible || ''),
     styleNotes: String(body.styleNotes || ''),
     voiceDescription: String(body.voiceDescription || ''),
-    refAssetIds,
+    refs,
   });
   return json({ character }, { status: 201 });
 });
