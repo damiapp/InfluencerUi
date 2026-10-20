@@ -1,0 +1,15 @@
+# Copy to .dev.vars (git-ignored) for local development and `npm run preview`.
+# In production set these with `npx wrangler secret put NAME` instead.
+
+# Leave empty to use the mock provider locally (no cost, placeholder media).
+GEMINI_API_KEY=
+# "google" or "mock". Defaults to google when GEMINI_API_KEY is set, otherwise mock (dev only).
+AI_PROVIDER=mock
+
+# Single-user login. Leave both empty in dev to skip the login screen.
+APP_PASSWORD=
+SESSION_SECRET=
+
+# Optional Cloudflare Access verification (see README).
+CF_ACCESS_TEAM_DOMAIN=
+CF_ACCESS_AUD=

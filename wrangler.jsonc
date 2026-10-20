@@ -1,0 +1,41 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "influencer-studio",
+  // worker.js wraps the OpenNext worker and adds the cron handler.
+  "main": "worker.js",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "influencer-studio",
+      // Replace with the id printed by `npx wrangler d1 create influencer-studio`.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "influencer-studio-media"
+    }
+  ],
+  // Finalises video jobs nobody is polling (Google deletes generated files after ~48h).
+  "triggers": {
+    "crons": ["*/10 * * * *"]
+  },
+  "vars": {
+    "AI_PROVIDER": "google"
+  },
+  // Secrets (set with `npx wrangler secret put NAME`, never committed):
+  //   GEMINI_API_KEY   Gemini API key
+  //   APP_PASSWORD     single-user login password
+  //   SESSION_SECRET   random string used to sign the login cookie
+  "observability": {
+    "enabled": true
+  }
+}
