@@ -59,7 +59,19 @@ export const VIDEO_MODELS = [
   },
 ];
 
-export const ALL_MODELS = [...IMAGE_MODELS, ...VIDEO_MODELS];
+// Text-to-speech with a character's stored voice (Voice Design). Every line is
+// spoken by the same voice id, unlike Omni's own audio which drifts per clip.
+export const SPEECH_MODELS = [
+  {
+    id: 'gemini-3.8-flash-tts',
+    name: 'Gemini 3.8 Flash TTS',
+    provider: 'google',
+    kind: 'audio',
+    description: 'Expressive speech with Voice Design voices.',
+  },
+];
+
+export const ALL_MODELS = [...IMAGE_MODELS, ...VIDEO_MODELS, ...SPEECH_MODELS];
 
 export function getModel(id) {
   return ALL_MODELS.find((model) => model.id === id) || null;
@@ -67,3 +79,4 @@ export function getModel(id) {
 
 export const DEFAULT_IMAGE_MODEL = IMAGE_MODELS[0].id;
 export const DEFAULT_VIDEO_MODEL = VIDEO_MODELS[0].id;
+export const DEFAULT_SPEECH_MODEL = SPEECH_MODELS[0].id;

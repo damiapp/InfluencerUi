@@ -29,6 +29,10 @@ export const PROMPT_PRESETS = [
     kinds: ['video'],
     text: 'No dialogue.',
   },
+  { id: 'snd-no-music', group: 'Sound', label: 'No music', kinds: ['video'], text: 'No background music.' },
+  { id: 'snd-ambience', group: 'Sound', label: 'Natural ambience', kinds: ['video'], text: 'Only natural ambient sound of the location.' },
+  { id: 'snd-calm', group: 'Sound', label: 'Calm music', kinds: ['video'], text: 'Calm, soft background music at low volume.' },
+  { id: 'snd-upbeat', group: 'Sound', label: 'Upbeat music', kinds: ['video'], text: 'Upbeat trendy background music.' },
   { id: 'cam-push', group: 'Camera', label: 'Slow push-in', kinds: ['video'], text: 'The camera slowly pushes in toward the subject.' },
   { id: 'cam-handheld', group: 'Camera', label: 'Handheld', kinds: ['video'], text: 'Handheld smartphone camera with subtle natural shake.' },
   { id: 'cam-orbit', group: 'Camera', label: 'Orbit', kinds: ['video'], text: 'The camera orbits slowly around the subject.' },
@@ -107,6 +111,7 @@ export function buildVideoPrompt({
   characterRefCount = 0,
   extraRefCount = 0,
   prompt = '',
+  dialogue = '',
 }) {
   const refCount = characterRefCount + extraRefCount;
   const lines = [];
@@ -135,6 +140,7 @@ export function buildVideoPrompt({
   }
 
   if (prompt.trim()) lines.push(prompt.trim());
+  lines.push(...buildDialogueLines(character, dialogue));
   const style = styleLine(character);
   if (style) lines.push(style);
 
@@ -146,6 +152,28 @@ export function buildVideoPrompt({
     );
   }
   return lines.join('\n');
+}
+
+/**
+ * Lines that make Omni speak a given line in the character's described voice.
+ * Omni cannot take a stored voice, so the voice is pinned with the same
+ * fixed description every time.
+ */
+export function buildDialogueLines(character, dialogue) {
+  const line = (dialogue || '').trim().replace(/"/g, '”');
+  if (!line) return [];
+  const speaker = character?.name || 'The person';
+  const lines = [`${speaker} says to the camera: "${line}"`];
+  const voice = (character?.voiceDescription || '').trim();
+  if (voice) lines.push(`Voice: ${voice}`);
+  lines.push('No other dialogue or voiceover.');
+  return lines;
+}
+
+/** Rough spoken length of a script, for cost estimates (~2.6 words per second). */
+export function estimateSpeechSeconds(text) {
+  const words = (text || '').trim().split(/\s+/).filter(Boolean).length;
+  return words ? Math.max(1, Math.round((words / 2.6 + 0.5) * 10) / 10) : 0;
 }
 
 export function buildEditPrompt(prompt, keepEverythingElse = true) {

@@ -5,7 +5,8 @@
     "Estimates only. Check https://ai.google.dev/gemini-api/docs/pricing and update these numbers; the build container could not reach that page, so the values come from secondary sources that cite it.",
     "Image prices are per output image (standard, not batch).",
     "Video prices are per second of generated output. Omni bills 5,792 output tokens per second at 720p at $17.50 per 1M output tokens (about $0.101/s); 1080p is 8,688 tokens/s.",
-    "inputImage is a rough per-image charge for reference images and frames (about 1k input tokens each)."
+    "inputImage is a rough per-image charge for reference images and frames (about 1k input tokens each).",
+    "Speech: $9 per 1M audio output tokens at ~25 tokens per second of speech; seconds are estimated from the script length. Voice Design itself has no separate published price."
   ],
   "image": {
     "gemini-3-pro-image": {
@@ -21,6 +22,11 @@
     "gemini-omni-1.1-flash": {
       "perSecond": { "360p": 0.034, "720p": 0.101, "1080p": 0.152, "4k": 0.304 },
       "inputImage": 0.0015
+    }
+  },
+  "audio": {
+    "gemini-3.8-flash-tts": {
+      "perSecond": 0.000225
     }
   }
 }

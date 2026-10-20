@@ -245,3 +245,50 @@ test('mock provider completes video after delay', async () => {
   const svg = await p.fetchOutput(img.outputs[0]);
   assert.match(new TextDecoder().decode(svg.body), /Café ✨/);
 });
+
+test('Voice Design creates a stored prompted voice', async () => {
+  const { fetch, calls } = fakeGemini({
+    'POST /v1beta/voices': () => json({ id: 'voice_abc123', type: 'prompted', expire_time: '2027-10-20T00:00:00Z' }),
+  });
+  const result = await provider(fetch).designVoice({ name: 'Ava', description: 'Warm husky alto.' });
+  assert.deepEqual(calls[0].body, {
+    store: true,
+    voice: { type: 'prompted', display_name: 'Ava', description: 'Warm husky alto.', prompted: { input: 'Warm husky alto.' } },
+  });
+  assert.equal(result.voiceId, 'voice_abc123');
+  const nested = fakeGemini({ 'POST /v1beta/voices': () => json({ voice: { name: 'voices/voice_xyz' } }) });
+  assert.equal((await provider(nested.fetch).designVoice({ name: 'B', description: 'x' })).voiceId, 'voice_xyz');
+});
+
+test('TTS uses the stored voice and wraps raw PCM as WAV', async () => {
+  const { pcm16ToWav, wavDurationSeconds } = await import('../lib/providers/wav.js');
+  const pcm = new Uint8Array(48000); // 1 s of 24 kHz mono 16-bit
+  const { fetch, calls } = fakeGemini({
+    'POST /v1beta/interactions': () => json({
+      id: 'tts1',
+      status: 'completed',
+      steps: [{ type: 'model_output', content: [{ type: 'audio', mime_type: 'audio/l16', sample_rate: 24000, data: Buffer.from(pcm).toString('base64') }] }],
+    }),
+  });
+  const p = provider(fetch);
+  const result = await p.generateSpeech({ model: 'gemini-3.8-flash-tts', voiceId: 'voice_abc123', text: 'Hello there', style: 'excited' });
+  assert.deepEqual(calls[0].body, {
+    model: 'gemini-3.8-flash-tts',
+    input: [{ type: 'text', text: 'Hello there', annotations: [{ type: 'speech_metadata', style: 'excited' }] }],
+    generation_config: { speech_config: [{ voice: 'voice_abc123' }] },
+    response_format: { type: 'audio', mime_type: 'audio/wav' },
+    store: false,
+  });
+  assert.equal(result.status, 'completed');
+  assert.equal(result.outputs[0].mimeType, 'audio/wav');
+  const file = await p.fetchOutput(result.outputs[0]);
+  assert.equal(wavDurationSeconds(file.body), 1);
+  assert.equal(wavDurationSeconds(pcm16ToWav(new Uint8Array(96000))), 2);
+});
+
+test('mock voices are stable per voice id', async () => {
+  const { mockSpeechWav } = await import('../lib/providers/mock.js');
+  const a = mockSpeechWav('voice_a', 'hello world');
+  assert.deepEqual(a, mockSpeechWav('voice_a', 'hello world'));
+  assert.notDeepEqual(a, mockSpeechWav('voice_b', 'hello world'));
+});

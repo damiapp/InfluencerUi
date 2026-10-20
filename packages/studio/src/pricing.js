@@ -9,12 +9,12 @@ function round(value) {
 /**
  * @param {object} pricing  contents of config/pricing.json
  * @param {object} request
- * @param {'image'|'video'} request.kind
+ * @param {'image'|'video'|'audio'} request.kind
  * @param {string} request.model
  * @param {string} [request.imageSize]        image: 1K/2K/4K
  * @param {number} [request.count]            image: number of images
  * @param {string} [request.resolution]       video: 720p/1080p/...
- * @param {number} [request.durationSeconds]  video: seconds of output
+ * @param {number} [request.durationSeconds]  video/audio: seconds of output
  * @param {number} [request.inputImages]      reference images + frames sent
  * @returns {number|null} USD estimate, or null if the model has no price
  */
@@ -38,6 +38,12 @@ export function estimateCost(pricing, request) {
     if (perSecond == null) return null;
     const seconds = Math.max(0, request.durationSeconds || 0);
     return round(seconds * perSecond + inputImages * (table.inputImage || 0));
+  }
+
+  if (request.kind === 'audio') {
+    const table = pricing.audio?.[request.model];
+    if (!table) return null;
+    return round(Math.max(0, request.durationSeconds || 0) * table.perSecond);
   }
 
   return null;

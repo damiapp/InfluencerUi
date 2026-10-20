@@ -62,3 +62,20 @@ test('cost estimates', () => {
   assert.equal(estimateCost(pricing, { kind: 'video', model: 'gemini-omni-1.1-flash', resolution: '720p', durationSeconds: 10 }), 1.01);
   assert.equal(estimateCost(pricing, { kind: 'video', model: 'unknown' }), null);
 });
+
+test('dialogue lines pin the character voice description', async () => {
+  const { buildDialogueLines, estimateSpeechSeconds } = await import('../packages/studio/src/prompt.js');
+  const ava = { name: 'Ava', voiceDescription: 'Warm husky alto, soft London accent.' };
+  assert.deepEqual(buildDialogueLines(ava, 'Hi "guys"!'), [
+    'Ava says to the camera: "Hi ”guys”!"',
+    'Voice: Warm husky alto, soft London accent.',
+    'No other dialogue or voiceover.',
+  ]);
+  assert.deepEqual(buildDialogueLines(null, ''), []);
+  assert.equal(buildDialogueLines(null, 'Yo')[0], 'The person says to the camera: "Yo"');
+  const out = buildVideoPrompt({ character: { ...mia, voiceDescription: 'Bright alto.' }, prompt: 'Walks.', dialogue: 'Hello!' });
+  assert.match(out, /Walks\.\nMia says to the camera: "Hello!"\nVoice: Bright alto\.\nNo other dialogue or voiceover\.\nStyle: Warm film tones\./);
+  assert.equal(estimateSpeechSeconds(''), 0);
+  assert.equal(estimateSpeechSeconds('one two three four five six seven eight nine ten eleven twelve thirteen'), 5.5);
+  assert.equal(estimateCost(pricing, { kind: 'audio', model: 'gemini-3.8-flash-tts', durationSeconds: 100 }), 0.0225);
+});

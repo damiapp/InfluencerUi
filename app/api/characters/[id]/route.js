@@ -26,6 +26,7 @@ export const PATCH = route(async (request, { params }) => {
   }
   if (body.bible !== undefined) changes.bible = String(body.bible);
   if (body.styleNotes !== undefined) changes.styleNotes = String(body.styleNotes);
+  if (body.voiceDescription !== undefined) changes.voiceDescription = String(body.voiceDescription);
   if (body.refAssetIds !== undefined) changes.refAssetIds = await validateRefs(env.DB, body.refAssetIds);
   return json({ character: await updateCharacter(env.DB, existing.id, changes) });
 });

@@ -19,6 +19,7 @@ export const POST = route(async (request) => {
     name,
     bible: String(body.bible || ''),
     styleNotes: String(body.styleNotes || ''),
+    voiceDescription: String(body.voiceDescription || ''),
     refAssetIds,
   });
   return json({ character }, { status: 201 });
