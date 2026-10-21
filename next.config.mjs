@@ -11,7 +11,7 @@ if (process.env.NODE_ENV !== 'production') {
   initOpenNextCloudflareForDev();
 
   // Route handlers read .dev.vars through the Cloudflare context, but
-  // middleware only sees process.env, so mirror the file there too.
+  // proxy.js only sees process.env, so mirror the file there too.
   if (existsSync('.dev.vars')) {
     for (const line of readFileSync('.dev.vars', 'utf8').split(/\r?\n/)) {
       const match = /^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/.exec(line);
