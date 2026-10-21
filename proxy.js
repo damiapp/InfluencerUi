@@ -29,7 +29,7 @@ function deny(request, status, message) {
     return addSecurityHeaders(new NextResponse(message, { status }));
 }
 
-export async function middleware(request) {
+export async function proxy(request) {
     const { pathname } = request.nextUrl;
     const config = authConfig();
     const modes = authMode(config);

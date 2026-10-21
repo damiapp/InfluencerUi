@@ -142,14 +142,14 @@ To put Cloudflare's login in front of the app as well as, or instead of, the pas
 1. Zero Trust dashboard → Access → Applications → Add → Self-hosted. Add your Worker's hostname (custom domain or
    `*.workers.dev`) and a policy that allows only your email.
 2. Copy the application's **AUD tag** and your team domain (`<team>.cloudflareaccess.com`).
-3. Set `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` (as `vars` or secrets). The middleware then verifies the
+3. Set `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` (as `vars` or secrets). `proxy.js` then verifies the
    `Cf-Access-Jwt-Assertion` signature, audience, issuer and expiry on every request.
 
 ## How it works
 
 ```
 browser ──► Next.js (OpenNext on Workers)
-             ├─ middleware.js           password cookie / Cloudflare Access check
+             ├─ proxy.js                password cookie / Cloudflare Access check (Next 16 "proxy")
              ├─ app/api/*               JSON routes; only place the Gemini key is used
              ├─ lib/generations.js      validate → provider → D1 → R2
              ├─ lib/pipelines.js        shoot → approve → animate runs
@@ -285,8 +285,8 @@ Design has no separate published price.
 - **Database:** run the new migrations with `npm run db:migrate:local` / `npm run db:migrate:remote` (0003 adds
   tags, bibles and pipeline runs).
 - **Next.js 16:** Next.js 15 reached end of support on 21 Oct 2026 and the OpenNext adapter refuses to build it, so
-  the app now uses Next.js 16. Next 16 calls `middleware.js` "proxy" and prints a deprecation warning, but it still
-  works on Workers.
+  the app now uses Next.js 16. The auth gate moved from `middleware.js` to `proxy.js`, Next 16's name for the same
+  feature (it now runs on the Node.js runtime).
 
 ## License
 
