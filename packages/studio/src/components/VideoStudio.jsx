@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
 import { DEFAULT_VIDEO_MODEL, getModel } from "../models.js";
+import { selectRefs } from "../refs.js";
 import { DEFAULT_EXTEND_PROMPT, buildDialogueLines, buildEditPrompt, buildVideoPrompt } from "../prompt.js";
 import { estimateCost, formatCost } from "../pricing.js";
 import { usePolling, useStudio } from "./StudioContext.jsx";
@@ -117,8 +118,9 @@ export default function VideoStudio() {
 
   // ── New clip prompt ──────────────────────────────────────────────────────
   const character = characters.find((c) => c.id === characterId) || null;
-  const characterRefs = (character?.refs || []).filter((r) => !excludedRefIds.includes(r.id)).slice(0, model.maxReferenceImages);
-  const extras = extraRefs.slice(0, Math.max(0, model.maxReferenceImages - characterRefs.length));
+  const extras = extraRefs.slice(0, model.maxReferenceImages - 1);
+  const characterBudget = model.maxReferenceImages - extras.length;
+  const characterRefs = selectRefs(character?.refs || [], characterBudget, { exclude: excludedRefIds });
   const referenceAssetIds = [...characterRefs, ...extras].map((a) => a.id);
   const effectiveLast = firstFrame ? lastFrame : null;
 
@@ -184,7 +186,7 @@ export default function VideoStudio() {
   const clipTotal = clip?.totalDurationSeconds || clip?.durationSeconds || 0;
   const clipReady = clip?.status === "completed";
   const clipCharacter = characters.find((c) => c.id === clip?.characterId) || null;
-  const extendRefs = extendWithRefs ? (clipCharacter?.refs || []).slice(0, model.maxReferenceImages) : [];
+  const extendRefs = extendWithRefs ? selectRefs(clipCharacter?.refs || [], model.maxReferenceImages) : [];
   // Voiceover versions are muxed locally and have no Gemini interaction to continue.
   const isVoiceover = clip?.operation === "voiceover";
   const canEdit = clipReady && !isVoiceover && clipTotal <= model.maxEditSeconds;
@@ -245,28 +247,14 @@ export default function VideoStudio() {
           <p className="text-[11px] text-muted">{model.id} · Interactions API</p>
         </div>
 
-        <CharacterPicker value={characterId} onChange={changeCharacter} />
-        {character && character.refs.length > 0 && (
-          <Field label="Character refs sent" hint={`max ${model.maxReferenceImages} for video`}>
-            <div className="flex flex-wrap gap-1.5">
-              {character.refs.map((ref) => {
-                const included = characterRefs.some((r) => r.id === ref.id);
-                return (
-                  <button
-                    key={ref.id}
-                    type="button"
-                    onClick={() => setExcludedRefIds((ids) => (ids.includes(ref.id) ? ids.filter((i) => i !== ref.id) : [...ids, ref.id]))}
-                    className={cx("h-12 w-12 overflow-hidden rounded-md border-2 transition", included ? "border-primary" : "border-transparent opacity-35")}
-                    title={included ? "Sent as reference (click to skip)" : "Skipped (click to include)"}
-                  >
-                    <img src={ref.url} alt="" className="h-full w-full object-cover" />
-                  </button>
-                );
-              })}
-            </div>
-          </Field>
-        )}
-
+        <CharacterPicker
+          value={characterId}
+          onChange={changeCharacter}
+          sent={characterRefs}
+          excluded={excludedRefIds}
+          budget={characterBudget}
+          onToggleRef={(id) => setExcludedRefIds((ids) => (ids.includes(id) ? ids.filter((i) => i !== id) : [...ids, id]))}
+        />
         <div className="flex gap-3">
           <FrameSlot label="First frame" asset={firstFrame} onPick={() => setPicker("first")} onClear={() => { setFirstFrame(null); replaceParams({ firstFrame: null }); }} />
           <FrameSlot label="Last frame" asset={lastFrame} onPick={() => setPicker("last")} onClear={() => setLastFrame(null)} disabled={!firstFrame} />

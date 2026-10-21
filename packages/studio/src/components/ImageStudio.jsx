@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
 import { DEFAULT_IMAGE_MODEL, IMAGE_MODELS, getModel } from "../models.js";
 import { buildImagePrompt } from "../prompt.js";
+import { selectRefs } from "../refs.js";
 import { estimateCost } from "../pricing.js";
 import { useStudio } from "./StudioContext.jsx";
 import MediaPicker from "./MediaPicker.jsx";
@@ -24,6 +25,7 @@ export default function ImageStudio() {
   const model = getModel(modelId);
   const [characterId, setCharacterId] = useState(null);
   const [extraRefs, setExtraRefs] = useState([]);
+  const [excludedRefIds, setExcludedRefIds] = useState([]);
   const [prompt, setPrompt] = useState("");
   const [override, setOverride] = useState(null);
   const [aspectRatio, setAspectRatio] = useState("9:16");
@@ -47,8 +49,11 @@ export default function ImageStudio() {
   }, [toast]);
 
   const character = characters.find((c) => c.id === characterId) || null;
-  const characterRefs = (character?.refs || []).slice(0, model.maxReferenceImages);
-  const extras = extraRefs.slice(0, Math.max(0, model.maxReferenceImages - characterRefs.length));
+  // Extra refs (outfits, products) keep their slots; the character gets the
+  // best varied subset of her library in the rest of the model's limit.
+  const extras = extraRefs.slice(0, model.maxReferenceImages - 1);
+  const characterBudget = model.maxReferenceImages - extras.length;
+  const characterRefs = selectRefs(character?.refs || [], characterBudget, { exclude: excludedRefIds });
   const referenceAssetIds = [...characterRefs, ...extras].map((a) => a.id);
 
   const built = useMemo(
@@ -67,6 +72,7 @@ export default function ImageStudio() {
 
   const changeCharacter = (id) => {
     setCharacterId(id);
+    setExcludedRefIds([]);
     replaceParams({ character: id });
   };
 
@@ -111,7 +117,14 @@ export default function ImageStudio() {
           <p className="mt-1 text-[11px] text-muted">{model.description}</p>
         </Field>
 
-        <CharacterPicker value={characterId} onChange={changeCharacter} />
+        <CharacterPicker
+          value={characterId}
+          onChange={changeCharacter}
+          sent={characterRefs}
+          excluded={excludedRefIds}
+          budget={characterBudget}
+          onToggleRef={(id) => setExcludedRefIds((ids) => (ids.includes(id) ? ids.filter((i) => i !== id) : [...ids, id]))}
+        />
 
         <Field label="Extra references" hint={`${referenceAssetIds.length}/${model.maxReferenceImages} images sent`}>
           <div className="flex flex-wrap gap-1.5">
