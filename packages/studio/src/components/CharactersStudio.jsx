@@ -4,19 +4,27 @@ import { useEffect, useState } from "react";
 import { api } from "../api.js";
 import { useStudio } from "./StudioContext.jsx";
 import MediaPicker from "./MediaPicker.jsx";
+import ReferenceLibrary from "./ReferenceLibrary.jsx";
+import BibleEditor from "./BibleEditor.jsx";
+import { MAX_CHARACTER_REFS, RECOMMENDED_CHARACTER_REFS } from "../refs.js";
+import { BIBLE_MODEL } from "../bible.js";
+import { estimateCost, formatCost } from "../pricing.js";
 import { Button, ErrorNote, Field, Panel, Spinner, TextArea, TextInput, cx } from "./ui.jsx";
 
-const MIN_REFS = 3;
-const MAX_REFS = 8;
-const EMPTY = { id: null, name: "", bible: "", styleNotes: "", voiceDescription: "", voiceId: null, voicePreview: null, refs: [] };
+const MAX_REFS = MAX_CHARACTER_REFS;
+const EMPTY = { id: null, name: "", bible: "", styleNotes: "", voiceDescription: "", voiceId: null, voicePreview: null, bibleData: null, bibleVersion: 0, refs: [] };
+
+// Reference list as the server stores it (order + tags), for dirty checks and saving.
+const refPayload = (refs) => refs.map((r) => ({ assetId: r.id, angle: r.angle || null, expression: r.expression || null, lighting: r.lighting || null, primary: !!r.primary }));
 
 export default function CharactersStudio() {
-  const { characters, charactersLoaded, refreshCharacters, navigate, route, replaceParams, toast } = useStudio();
+  const { characters, charactersLoaded, refreshCharacters, navigate, route, replaceParams, toast, pricing } = useStudio();
   const [draft, setDraft] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [designing, setDesigning] = useState(false);
+  const [tagging, setTagging] = useState(false);
 
   // Select the character from ?id= or the first one.
   useEffect(() => {
@@ -43,7 +51,8 @@ export default function CharactersStudio() {
     saved.bible !== draft.bible ||
     saved.styleNotes !== draft.styleNotes ||
     (saved.voiceDescription || "") !== (draft.voiceDescription || "") ||
-    saved.refs.map((r) => r.id).join() !== draft.refs.map((r) => r.id).join();
+    JSON.stringify(refPayload(saved.refs)) !== JSON.stringify(refPayload(draft.refs));
+  const refsDirty = !!saved && JSON.stringify(refPayload(saved.refs)) !== JSON.stringify(refPayload(draft.refs));
 
   const save = async () => {
     setSaving(true);
@@ -54,7 +63,7 @@ export default function CharactersStudio() {
         bible: draft.bible,
         styleNotes: draft.styleNotes,
         voiceDescription: draft.voiceDescription || "",
-        refAssetIds: draft.refs.map((r) => r.id),
+        refs: refPayload(draft.refs),
       };
       const character = draft.id ? await api.updateCharacter(draft.id, body) : await api.createCharacter(body);
       await refreshCharacters();
@@ -80,6 +89,21 @@ export default function CharactersStudio() {
       setError(err.message);
     } finally {
       setDesigning(false);
+    }
+  };
+
+  const autoTag = async () => {
+    setTagging(true);
+    setError("");
+    try {
+      const character = await api.autoTagRefs(draft.id);
+      await refreshCharacters();
+      setDraft((d) => ({ ...d, refs: character.refs }));
+      toast(`Tagged ${character.refs.length} references`, "success");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setTagging(false);
     }
   };
 
@@ -125,7 +149,9 @@ export default function CharactersStudio() {
             )}
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold text-white">{c.name}</div>
-              <div className={cx("text-[11px]", c.refs.length < MIN_REFS ? "text-amber-300" : "text-muted")}>{c.refs.length} refs</div>
+              <div className={cx("text-[11px]", c.refs.length < RECOMMENDED_CHARACTER_REFS ? "text-amber-300" : "text-muted")}>
+                {c.refs.length} refs{c.bibleVersion ? ` · bible v${c.bibleVersion}` : ""}
+              </div>
             </div>
           </button>
         ))}
@@ -142,6 +168,9 @@ export default function CharactersStudio() {
               <Button size="sm" onClick={() => navigate("video", { character: draft.id })}>
                 Use in Video Studio
               </Button>
+              <Button size="sm" variant="primary" onClick={() => navigate("shoot", { character: draft.id })}>
+                Shoot
+              </Button>
             </div>
           )}
         </div>
@@ -150,12 +179,12 @@ export default function CharactersStudio() {
           <TextInput value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Mia" />
         </Field>
 
-        <Field label="Character bible" hint="prepended to every prompt">
+        <Field label="Extra notes" hint={draft.bibleData?.prompt_paragraph ? "added after the bible as “Notes: …”" : "used as the bible until one is generated"}>
           <TextArea
-            rows={6}
+            rows={3}
             value={draft.bible}
             onChange={(e) => setDraft({ ...draft, bible: e.target.value })}
-            placeholder="24-year-old woman. Oval face, light freckles across the nose, hazel-green eyes, thick straight brows. Copper-red chin-length bob with a side part. Small gold nose ring on the left nostril, tiny star tattoo behind the right ear."
+            placeholder="Anything the generated bible should not cover, e.g. always wears her grandmother's silver ring."
           />
         </Field>
 
@@ -189,48 +218,36 @@ export default function CharactersStudio() {
           </p>
         </Field>
 
-        <Field label="Locked reference images" hint={`${draft.refs.length}/${MAX_REFS} · ${MIN_REFS}–${MAX_REFS} recommended`}>
-          <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
-            {draft.refs.map((ref, i) => (
-              <div key={ref.id} className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-white/10">
-                <img src={ref.url} alt="" className="h-full w-full object-cover" />
-                <span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[10px] font-bold text-white">{i + 1}</span>
-                <div className="absolute inset-x-0 bottom-0 hidden justify-between bg-black/70 p-1 group-hover:flex">
-                  <button type="button" onClick={() => moveRef(i, -1)} className="px-1 text-xs text-white" aria-label="Move left">
-                    ◀
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDraft((d) => ({ ...d, refs: d.refs.filter((r) => r.id !== ref.id) }))}
-                    className="px-1 text-xs text-red-300"
-                  >
-                    Remove
-                  </button>
-                  <button type="button" onClick={() => moveRef(i, 1)} className="px-1 text-xs text-white" aria-label="Move right">
-                    ▶
-                  </button>
-                </div>
-              </div>
-            ))}
-            {draft.refs.length < MAX_REFS && (
-              <button
-                type="button"
-                onClick={() => setPickerOpen(true)}
-                className="flex aspect-[3/4] items-center justify-center rounded-lg border border-dashed border-white/20 text-2xl text-secondary hover:border-primary hover:text-primary"
-              >
-                ＋
-              </button>
-            )}
+        <Field label="Reference library" hint={`${draft.refs.length}/${MAX_REFS} · ★ primary (max 3) is always sent first`}>
+          <ReferenceLibrary refs={draft.refs} onChange={(refs) => setDraft((d) => ({ ...d, refs }))} onAdd={() => setPickerOpen(true)} />
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Button size="sm" onClick={autoTag} disabled={!draft.id || tagging || refsDirty || !draft.refs.length}>
+              {tagging ? <Spinner /> : "🏷"} Auto-tag angles, expressions & lighting
+            </Button>
+            <span className="text-[11px] text-muted">
+              {refsDirty
+                ? "Save the reference changes first."
+                : `${BIBLE_MODEL} · ≈ ${formatCost(estimateCost(pricing, { kind: "text", model: BIBLE_MODEL, inputImages: draft.refs.length, outputTokens: 60 * draft.refs.length }))} · you can correct every tag by hand`}
+            </span>
           </div>
-          {draft.refs.length < MIN_REFS && (
-            <p className="mt-2 text-xs text-amber-300">
-              Add at least {MIN_REFS} clear references (front face, three-quarter, full body) for consistent results.
-            </p>
-          )}
           <p className="mt-1 text-[11px] text-muted">
-            Order matters: the first references carry the most weight. Image Studio sends all of them; Video Studio sends up to 5.
+            Each generation sends the best subset within the model&apos;s limit: primaries first, then the most varied angles,
+            expressions and lighting (Nano Banana up to 14, Omni up to 5). The studios show which ones were sent.
           </p>
         </Field>
+
+        {draft.id && saved && (
+          <Field label="Character bible" hint="auto-written from the references · versioned">
+            <BibleEditor
+              character={saved}
+              unsavedRefs={refsDirty}
+              onChanged={(character) => {
+                refreshCharacters();
+                setDraft((d) => ({ ...d, bibleData: character.bibleData, bibleVersion: character.bibleVersion }));
+              }}
+            />
+          </Field>
+        )}
 
         <ErrorNote>{error}</ErrorNote>
         <div className="flex gap-2">
@@ -251,7 +268,7 @@ export default function CharactersStudio() {
         max={MAX_REFS - draft.refs.length}
         excludeIds={draft.refs.map((r) => r.id)}
         title="Add reference images"
-        onConfirm={(assets) => setDraft((d) => ({ ...d, refs: [...d.refs, ...assets].slice(0, MAX_REFS) }))}
+        onConfirm={(assets) => setDraft((d) => ({ ...d, refs: [...d.refs, ...assets.map((a) => ({ ...a, primary: false }))].slice(0, MAX_REFS) }))}
       />
     </div>
   );

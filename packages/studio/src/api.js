@@ -43,7 +43,19 @@ export const api = {
   createCharacter: (body) => request('/api/characters', { method: 'POST', body }).then((d) => d.character),
   updateCharacter: (id, body) => request(`/api/characters/${id}`, { method: 'PATCH', body }).then((d) => d.character),
   deleteCharacter: (id) => request(`/api/characters/${id}`, { method: 'DELETE' }),
-  addCharacterRef: (id, assetId) => request(`/api/characters/${id}/refs`, { method: 'POST', body: { assetId } }).then((d) => d.character),
+  addCharacterRef: (id, assetId, tags = {}) =>
+    request(`/api/characters/${id}/refs`, { method: 'POST', body: { assetId, ...tags } }).then((d) => d.character),
+  autoTagRefs: (id) => request(`/api/characters/${id}/refs/autotag`, { method: 'POST' }).then((d) => d.character),
+  bibleHistory: (id) => request(`/api/characters/${id}/bible`).then((d) => d.versions),
+  generateBible: (id) => request(`/api/characters/${id}/bible/generate`, { method: 'POST' }),
+  saveBible: (id, data) => request(`/api/characters/${id}/bible`, { method: 'PUT', body: { data } }),
+  restoreBible: (id, version) => request(`/api/characters/${id}/bible`, { method: 'PUT', body: { restoreVersion: version } }),
+
+  createPipeline: (body) => request('/api/pipelines', { method: 'POST', body }),
+  getPipeline: (id) => request(`/api/pipelines/${id}`),
+  shootMore: (id, body) => request(`/api/pipelines/${id}/shoot`, { method: 'POST', body }),
+  approveStill: (id, stillId) => request(`/api/pipelines/${id}/approve`, { method: 'POST', body: { stillId } }),
+  animatePipeline: (id, body) => request(`/api/pipelines/${id}/animate`, { method: 'POST', body }),
   designVoice: (id, voiceDescription) =>
     request(`/api/characters/${id}/voice`, { method: 'POST', body: { voiceDescription } }).then((d) => d.character),
   generateSpeech: (body) => request('/api/generations/speech', { method: 'POST', body }).then((d) => d.generation),
