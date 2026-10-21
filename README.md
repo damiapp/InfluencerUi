@@ -4,6 +4,10 @@ A private, single-user AI studio for consistent AI-influencer content. You desig
 with her locked references, animate them into vertical 9:16 clips, then edit and extend the clips. Everything calls
 Google's Gemini API directly and is stored in your own Cloudflare account.
 
+- **Shoot → Animate**: the fixed pipeline. **Shoot** 2–4 variants of a scene with Nano Banana Pro, using the
+  character bible and auto-selected references. **Approve** one still with one click (only approved stills can be
+  animated). **Animate** it with Gemini Omni Flash: run a cheap **Test** at 360p / 4 s, then a **Final** at 720p
+  with the same inputs. Each run is one gallery item.
 - **Image Studio**: Nano Banana Pro (`gemini-3-pro-image`) and Nano Banana 2.1 (`gemini-nano-banana-2.1`), up to
   14 reference images, any supported aspect ratio, 1K/2K/4K.
 - **Video Studio**: Gemini Omni Flash (`gemini-omni-1.1-flash`) through the Interactions API. Defaults to 9:16 at
@@ -16,11 +20,12 @@ Google's Gemini API directly and is stored in your own Cloudflare account.
   as a new version, so the voice is identical every time.
 - **AI Influencer**: a trait picker for designing a new person. It generates portraits and saves the best ones as a
   character.
-- **Characters**: each character has a name, a bible (face, hair, signature details), 3–8 locked reference images
-  and default style notes. Selecting a character auto-attaches the references and prepends the bible. The final
+- **Characters**: each character has a name, a tagged library of 10–20 reference images (angle, expression,
+  lighting, up to 3 ★ primaries), an auto-written and versioned **character bible**, a voice and default style
+  notes. Selecting a character auto-attaches the best subset of the references and prepends the bible. The final
   prompt is always shown and editable before you generate.
 - **Gallery**: every generation with its prompt, final prompt, model, settings, interaction id and cost. Items can
-  be favourited, used as a reference, animated (sent to Video Studio as `<FIRST_FRAME>`), edited or extended.
+  be favourited, **promoted to a character's references**, animated (sent to Video Studio as `<FIRST_FRAME>`), edited or extended.
 - **Cost**: an estimate before every generation and a running monthly total, from `config/pricing.json`.
 - **Storage**: metadata in Cloudflare D1, and all media in R2. Outputs are copied to R2 as soon as Google
   finishes them, because Google deletes generated files after about 48 h.
@@ -53,7 +58,7 @@ Local D1 and R2 data live in `.wrangler/state/` (git-ignored). `rm -rf .wrangler
 ### Tests
 
 ```bash
-npm test     # prompt builder, pricing, GoogleProvider against a fake Gemini REST server, auth
+npm test     # prompt builder, reference selection, bible, pricing, GoogleProvider against a fake Gemini REST server, auth
 ```
 
 ## Configuration
@@ -147,11 +152,14 @@ browser ──► Next.js (OpenNext on Workers)
              ├─ middleware.js           password cookie / Cloudflare Access check
              ├─ app/api/*               JSON routes; only place the Gemini key is used
              ├─ lib/generations.js      validate → provider → D1 → R2
+             ├─ lib/pipelines.js        shoot → approve → animate runs
+             ├─ lib/bibles.js           character bible + reference auto-tagging
              ├─ lib/providers/
-             │    provider.js           interface: generateImage, generateVideo, editVideo, extendVideo, getStatus, fetchOutput
+             │    provider.js           interface: generateImage, generateVideo, editVideo, extendVideo,
+             │                          generateStructured, designVoice, generateSpeech, getStatus, fetchOutput
              │    google.js             Interactions API + Files API (plain fetch)
              │    mock.js               offline provider for development
-             ├─ D1 (DB)                 assets, characters, character_refs, generations
+             ├─ D1 (DB)                 assets, characters, character_refs, character_bibles, generations
              └─ R2 (MEDIA)              every upload and output
 packages/studio/                        React UI (studios, picker, prompt builder, models, pricing)
 ```
@@ -167,12 +175,70 @@ packages/studio/                        React UI (studios, picker, prompt builde
   `[# Sources …] [# References …]` declaration is used.
 - Edit and extend send `previous_interaction_id` with a short prompt. Every interaction id is saved on its
   generation row.
+- Bible and tags: `model: "gemini-3.8-flash"`, all references as image parts, and `response_format: {type: "text",
+  mime_type: "application/json", schema}` (structured output); `store: false`.
 - `GET /v1beta/interactions/{id}` is polled until it completes. Then `GET /v1beta/files/{name}` is polled until
   the state is `ACTIVE`, and `…:download?alt=media` is streamed into R2.
 
 **Adding another provider.** Implement the methods in `lib/providers/provider.js`, register the provider in
 `lib/providers/index.js`, and add its models to `packages/studio/src/models.js` and prices to
 `config/pricing.json`.
+
+## Reference library, character bible and the Shoot pipeline
+
+### Reference library (10–20 images per character)
+
+Upload 10–20 photos in **Characters → Reference library**. Tag each one with an angle (front, ¾, profile, full
+body), an expression and the lighting, or click **Auto-tag** to have `gemini-3.8-flash` fill in all the tags
+(≈ $0.02); you can correct any tag by hand. Star up to 3 **primary** references.
+
+Every request sends the best subset that fits the model's documented limit: **Nano Banana Pro and 2.1 take up to
+14 images, Omni Flash 5.** Primaries always go first. The remaining slots are filled greedily with the most
+varied references: a new angle counts most, then a new expression, then new lighting, and untagged images come
+last (`packages/studio/src/refs.js`). In Image Studio, Video Studio and Shoot, the character's references show
+the ones being sent, numbered in send order. Click a reference to skip it. Extra references you attach yourself
+(outfits, products) keep their slots, and the character gets the rest. The gallery details list exactly which
+images each generation sent.
+
+Any image in the gallery or in a run can be **promoted to a reference** (optionally with its angle), so approved
+outputs can join the library.
+
+### Character bible
+
+**Generate bible** sends all of the character's references to `gemini-3.8-flash` (the balanced multimodal model
+Google recommends) with structured JSON output. The fields are: `face_shape`, `eyes`, `brows`, `nose`,
+`lips_and_teeth`, `skin` (tone, freckles, marks), `hair` (color, length, cut, texture), `build`,
+`signature_accessories`, `style_palette`, `never_change` (a list) and `prompt_paragraph` (60–90 words).
+
+The model is told to describe only what is visible, to say "not visible" or "varies" instead of guessing, to
+describe features neutrally, and never to compare the character to, or name, any real person. It costs about
+$0.02–0.03 for 15–20 references; the real cost is computed from the token counts Google returns.
+
+Every save is a new version (generated / edited / restored), and **History** can restore any earlier version. The
+bible is only regenerated when you click the button. `prompt_paragraph` and the `never_change` list are prepended
+to every image and video prompt for that character, and are visible and editable in the final-prompt preview. The
+old free-text field is now **Extra notes**, added after the bible as `Notes: …`.
+
+### Shoot → Approve → Animate
+
+1. **Shoot**: pick a character, write a scene, choose 2–4 variants. Nano Banana Pro gets the bible plus up to 14
+   auto-selected references, at 9:16 and 2K. **+ into run** adds more variants to the same run.
+2. **Approve**: one click picks the still. Only approved stills can be animated.
+3. **Animate**: the approved still is sent to Omni Flash as `<FIRST_FRAME>`, with the first 1–2 primary references
+   as `<IMAGE_REF_0>` and `<IMAGE_REF_1>`, using the docs' explicit declaration
+   `[# Sources <FIRST_FRAME>@Image1] [# References <IMAGE_REF_0>@Image2 <IMAGE_REF_1>@Image3]`, then the bible and
+   your motion prompt. The defaults are 9:16, "In a single continuous shot. No scene cuts." and one take.
+   **Test** renders at 360p / 4 s (about $0.14). **Final** renders at 720p and, by default, reuses the test's exact
+   prompt and images (you can pick a length of 4–10 s).
+
+If Google refuses a request for policy reasons (for example the prominent-people filter or other safety filters),
+the generation is marked **Blocked** and shows Google's exact message. It is never retried automatically, and a
+blocked still cannot be approved. Detection is a loose match on Google's wording (safety, policy, prominent,
+prohibited, …) and on "returned only text, no image".
+
+Each run is **one gallery item** (filter **Runs**). It holds every still (approved and blocked ones marked),
+the test and final videos with their interaction ids, each cost and the run total. Stills and videos that belong
+to a run don't appear separately in the gallery. A final video can still be edited or extended in Video Studio.
 
 ## Voice and audio
 
@@ -205,14 +271,22 @@ Design has no separate published price.
 ## Notes and limits
 
 - Omni edits work on clips of up to 10 s. Extend in 10 s steps up to 40 s total. Edit first, then extend.
-- Video Studio sends at most 5 reference images (the documented Omni limit), and you can toggle which of the
-  character's references are sent. Image Studio sends all of them (up to 14).
+- References per request: Nano Banana up to 14 (Google notes identity holds best for up to 5 people, with 6 images
+  at high fidelity), Omni Flash up to 5. With a 20-image library, the auto-selection decides which 14 or 5 go.
 - Mixing a voiceover needs a browser with WebCodecs audio encoding (current Chrome or Firefox). To keep the
   clip's original sound under the voice, the browser must also decode AAC. Google Chrome and Firefox do; some
   open-source Chromium builds don't, and then only the voice is kept.
 - Interactions must stay stored (`store: true`) for Edit/Extend to work.
 - Google documents that uploading videos for editing is not available in the EEA, Switzerland, the UK and some US
   states. This app only edits and extends clips it generated itself, which Google says is supported everywhere.
+
+## Upgrading
+
+- **Database:** run the new migrations with `npm run db:migrate:local` / `npm run db:migrate:remote` (0003 adds
+  tags, bibles and pipeline runs).
+- **Next.js 16:** Next.js 15 reached end of support on 21 Oct 2026 and the OpenNext adapter refuses to build it, so
+  the app now uses Next.js 16. Next 16 calls `middleware.js` "proxy" and prints a deprecation warning, but it still
+  works on Workers.
 
 ## License
 
