@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api.js";
 import { formatCost } from "../pricing.js";
 import { StudioProvider, useStudio } from "./StudioContext.jsx";
+import ShootStudio from "./ShootStudio.jsx";
 import ImageStudio from "./ImageStudio.jsx";
 import VideoStudio from "./VideoStudio.jsx";
 import InfluencerStudio from "./InfluencerStudio.jsx";
@@ -18,6 +19,12 @@ const icon = (d) => (
 );
 
 const TABS = [
+  {
+    id: "shoot",
+    label: "Shoot → Animate",
+    component: ShootStudio,
+    icon: icon(<><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></>),
+  },
   {
     id: "image",
     label: "Image Studio",
@@ -123,7 +130,7 @@ function Shell() {
         )}
       </nav>
 
-      <main className="flex min-h-0 flex-1 flex-col">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
         {isMock && (
           <div className="border-b border-amber-500/20 bg-amber-500/10 px-4 py-1.5 text-xs text-amber-200">
             Mock provider: placeholder images and clips, no Gemini calls, no cost. Set GEMINI_API_KEY to use Google.

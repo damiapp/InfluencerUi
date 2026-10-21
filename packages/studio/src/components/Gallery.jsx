@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../api.js";
 import { usePolling, useStudio } from "./StudioContext.jsx";
 import { GenerationActions, GenerationDetails, GenerationMedia } from "./parts.jsx";
+import { PipelineSummary } from "./ShootStudio.jsx";
 import { Button, Modal, Segmented, Select, Spinner, cx } from "./ui.jsx";
 
 const PAGE = 40;
@@ -19,7 +20,7 @@ export default function Gallery() {
 
   const params = useCallback(
     (before) => ({
-      kind: ["image", "video", "audio"].includes(filter) ? filter : null,
+      kind: ["image", "video", "audio", "pipeline"].includes(filter) ? filter : null,
       favorite: filter === "favorites",
       characterId: characterId || null,
       before,
@@ -84,6 +85,7 @@ export default function Gallery() {
               { value: "all", label: "All" },
               { value: "image", label: "Images" },
               { value: "video", label: "Videos" },
+              { value: "pipeline", label: "Runs" },
               { value: "audio", label: "Voice" },
               { value: "favorites", label: "★ Favorites" },
             ]}
@@ -116,7 +118,13 @@ export default function Gallery() {
                   <button type="button" className="relative block w-full" onClick={() => setDetail(g)}>
                     <GenerationMedia generation={g} className="aspect-[3/4] w-full" />
                     <span className={cx("absolute left-2 top-2 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase", g.kind === "image" ? "bg-black/60 text-white" : "bg-fuchsia-500/80 text-white")}>
-                      {g.kind === "video" ? `${g.operation === "generate" ? "video" : g.operation} · ${g.totalDurationSeconds}s` : g.kind === "audio" ? "voice" : "image"}
+                      {g.kind === "pipeline"
+                        ? `run · ${g.settings?.stage || ""}`
+                        : g.kind === "video"
+                          ? `${g.operation === "generate" ? "video" : g.operation} · ${g.totalDurationSeconds}s`
+                          : g.kind === "audio"
+                            ? "voice"
+                            : "image"}
                     </span>
                     {g.favorite && <span className="absolute right-2 top-2 text-amber-300">★</span>}
                   </button>
@@ -136,8 +144,9 @@ export default function Gallery() {
         )}
       </div>
 
-      <Modal open={!!detail} onClose={() => setDetail(null)} title={{ video: "Video", audio: "Voice line", image: "Image" }[detail?.kind] || "Item"} wide>
-        {detail && (
+      <Modal open={!!detail} onClose={() => setDetail(null)} title={{ video: "Video", audio: "Voice line", image: "Image", pipeline: "Shoot → Animate run" }[detail?.kind] || "Item"} wide>
+        {detail?.kind === "pipeline" && <RunDetail id={detail.id} generation={detail} onChange={update} />}
+        {detail && detail.kind !== "pipeline" && (
           <div className="grid gap-5 md:grid-cols-[1fr,320px]">
             <GenerationMedia generation={detail} controls className="max-h-[70vh] w-full rounded-xl object-contain" />
             <div className="space-y-4">
@@ -147,6 +156,25 @@ export default function Gallery() {
           </div>
         )}
       </Modal>
+    </div>
+  );
+}
+
+/** A pipeline run as one gallery item: stills, approved still, videos, costs. */
+function RunDetail({ id, generation, onChange }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    api.getPipeline(id).then(setData).catch((err) => setError(err.message));
+  }, [id]);
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-white/70">{generation.prompt}</p>
+        <GenerationActions generation={generation} onChange={onChange} />
+      </div>
+      {error && <p className="text-sm text-red-300">{error}</p>}
+      {data ? <PipelineSummary data={data} /> : !error && <Spinner />}
     </div>
   );
 }

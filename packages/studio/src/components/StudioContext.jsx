@@ -5,7 +5,7 @@ import { api } from "../api.js";
 
 const StudioContext = createContext(null);
 
-export const TAB_IDS = ["image", "video", "influencer", "characters", "gallery"];
+export const TAB_IDS = ["shoot", "image", "video", "influencer", "characters", "gallery"];
 
 function readRoute() {
   if (typeof window === "undefined") return { tab: "image", params: {} };
