@@ -39,8 +39,9 @@ Google's Gemini API directly and is stored in your own Cloudflare account.
 
 ## Quick start (local, no API key needed)
 
-Requires Node.js 20+ and npm only. Nothing is installed system-wide: Wrangler, Miniflare and Next.js are project
-dependencies, so this works on SteamOS / an immutable root filesystem.
+Requires **Node.js 22+** (Wrangler needs it) and npm, nothing else. Wrangler, Miniflare and Next.js are project
+dependencies, so nothing is installed system-wide. On a Steam Deck, see [SteamOS / Steam Deck](#steamos--steam-deck)
+first.
 
 ```bash
 npm install
@@ -54,6 +55,41 @@ a bundled 3-second test clip, which is enough to click through every flow. When 
 `GEMINI_API_KEY=...` and `AI_PROVIDER=google` in `.dev.vars`, then restart `npm run dev`.
 
 Local D1 and R2 data live in `.wrangler/state/` (git-ignored). `rm -rf .wrangler/state` resets everything.
+
+### SteamOS / Steam Deck
+
+Everything runs from your home folder, so SteamOS updates don't touch it and nothing needs `sudo` or
+`steamos-readonly disable`. Switch to **Desktop Mode** and open **Konsole**.
+
+1. Install Node.js 22 into your home folder (once):
+
+   ```bash
+   mkdir -p ~/.local/node
+   curl -fsSL https://nodejs.org/dist/v22.22.0/node-v22.22.0-linux-x64.tar.xz | tar -xJ -C ~/.local/node --strip-components=1
+   echo 'export PATH="$HOME/.local/node/bin:$PATH"' >> ~/.bashrc
+   source ~/.bashrc
+   node -v    # v22.22.0
+   ```
+
+   (Any Node 22+ release works; `nvm` or `fnm` installed in your home folder are fine too.)
+2. Get the code and run it:
+
+   ```bash
+   git clone https://github.com/damiapp/InfluencerUi.git ~/InfluencerUi
+   cd ~/InfluencerUi
+   git checkout claude/personal-ai-studio-gemini-kiti85   # until it is merged into main
+   npm install
+   cp .dev.vars.example .dev.vars
+   npm run db:migrate:local
+   npm run dev
+   ```
+
+3. Open <http://localhost:3000> in Firefox or Chrome (the Flatpak versions from Discover work).
+
+`npm install` downloads about 750 MB into `node_modules/`. Cloudflare's local runtime (`workerd`, used for
+`npm run dev`'s D1/R2 and `npm run preview`) is a prebuilt x86-64 binary needing glibc 2.35 or newer, which current
+SteamOS 3.x has. For deployment, `npx wrangler login` opens the browser for you, and the rest of
+[Deploying](#deploying-to-cloudflare-workers) works the same.
 
 ### Tests
 
