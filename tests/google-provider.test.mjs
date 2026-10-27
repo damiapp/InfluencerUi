@@ -37,11 +37,14 @@ function media(id, uploads) {
   };
 }
 
+// Files API copies live ~48 h; keep the fake's expiry relative to now.
+const FILE_EXPIRY = new Date(Date.now() + 47 * 3600_000).toISOString();
+
 const fileHandlers = {
   'POST /upload/v1beta/files': () => new Response('{}', { headers: { 'x-goog-upload-url': `${BASE}/upload-session/1` } }),
   'POST /upload-session/1': ({ calls }) => {
     const n = calls.filter((c) => c.key === 'POST /upload-session/1').length;
-    return json({ file: { name: `files/ref${n}`, uri: `${BASE}/v1beta/files/ref${n}`, state: 'ACTIVE', expirationTime: '2026-10-22T00:00:00Z' } });
+    return json({ file: { name: `files/ref${n}`, uri: `${BASE}/v1beta/files/ref${n}`, state: 'ACTIVE', expirationTime: FILE_EXPIRY } });
   },
 };
 
@@ -80,7 +83,7 @@ test('generateImage sends refs as uploaded file parts then text, with response_f
     store: true,
   });
   assert.equal(uploads.length, 2);
-  assert.equal(uploads[0].expiresAt, Date.parse('2026-10-22T00:00:00Z'));
+  assert.equal(uploads[0].expiresAt, Date.parse(FILE_EXPIRY));
   assert.equal(result.status, 'completed');
   assert.equal(result.outputs.length, 1);
   const out = await p.fetchOutput(result.outputs[0]);
